@@ -20,13 +20,18 @@ const relay1CardEl = document.getElementById("relay1-card");
 const relay2CardEl = document.getElementById("relay2-card");
 const relay1StateEl = document.getElementById("relay1-state");
 const relay2StateEl = document.getElementById("relay2-state");
+const servoStateEl = document.getElementById("servo-state");
+const servoSliderEl = document.getElementById("servo-slider");
+const servoSendBtnEl = document.getElementById("servo-send");
 
 let mqttClient = null;
 let mqttConnected = false;
+let servoPublishTimer = null;
 
 const state = {
   relay1: 0,
   relay2: 0,
+  servo: 90,
 };
 
 function setStatus(text) {
@@ -39,21 +44,45 @@ function renderRelay(cardEl, stateEl, relayValue) {
   cardEl.classList.toggle("active", isOn);
 }
 
+function clampServoAngle(value) {
+  return Math.max(0, Math.min(180, value));
+}
+
+function renderServo() {
+  const angle = clampServoAngle(Number(state.servo));
+  state.servo = angle;
+
+  servoStateEl.textContent = `Position: ${angle} deg`;
+  if (Number(servoSliderEl.value) !== angle) {
+    servoSliderEl.value = String(angle);
+  }
+}
+
 function renderState() {
   renderRelay(relay1CardEl, relay1StateEl, state.relay1);
   renderRelay(relay2CardEl, relay2StateEl, state.relay2);
+  renderServo();
 }
 
-function parseRelayPayload(payloadText) {
+function parseStatePayload(payloadText) {
   const parts = payloadText.trim().split(",");
-  if (parts.length !== 2) return null;
+  if (!(parts.length === 2 || parts.length === 3)) return null;
 
   const relay1 = Number(parts[0]);
   const relay2 = Number(parts[1]);
+
   if (!Number.isInteger(relay1) || !Number.isInteger(relay2)) return null;
   if (!([0, 1].includes(relay1) && [0, 1].includes(relay2))) return null;
 
-  return { relay1, relay2 };
+  let servo = null;
+  if (parts.length === 3) {
+    const nextServo = Number(parts[2]);
+    if (!Number.isInteger(nextServo)) return null;
+    if (nextServo < 0 || nextServo > 180) return null;
+    servo = nextServo;
+  }
+
+  return { relay1, relay2, servo };
 }
 
 function normalizeBrokerUrl(rawUrl) {
@@ -94,6 +123,11 @@ function saveSettings() {
 }
 
 function disconnectMqtt(showMessage = true) {
+  if (servoPublishTimer) {
+    window.clearTimeout(servoPublishTimer);
+    servoPublishTimer = null;
+  }
+
   if (mqttClient) {
     mqttClient.end(true);
     mqttClient = null;
@@ -160,7 +194,7 @@ function connectMqtt() {
     if (topic !== topicState) return;
 
     const payload = payloadBuffer.toString("utf8");
-    const parsed = parseRelayPayload(payload);
+    const parsed = parseStatePayload(payload);
 
     if (!parsed) {
       setStatus(`Invalid state payload: ${payload}`);
@@ -169,6 +203,10 @@ function connectMqtt() {
 
     state.relay1 = parsed.relay1;
     state.relay2 = parsed.relay2;
+    if (parsed.servo !== null) {
+      state.servo = parsed.servo;
+    }
+
     renderState();
     setStatus(`State received: ${payload}`);
   });
@@ -194,10 +232,26 @@ function publishCommand() {
   }
 
   const topicCmd = topicCmdEl.value.trim();
-  const payload = `${state.relay1},${state.relay2}`;
+  const payload = `${state.relay1},${state.relay2},${state.servo}`;
 
   mqttClient.publish(topicCmd, payload, { retain: false });
   setStatus(`Command published: ${payload}`);
+}
+
+function queueServoPublish() {
+  if (servoPublishTimer) {
+    window.clearTimeout(servoPublishTimer);
+  }
+
+  servoPublishTimer = window.setTimeout(() => {
+    servoPublishTimer = null;
+
+    try {
+      publishCommand();
+    } catch (error) {
+      setStatus(`Action failed: ${error.message}`);
+    }
+  }, 140);
 }
 
 function setRelay(relayIndex, value) {
@@ -209,6 +263,25 @@ function setRelay(relayIndex, value) {
     }
 
     renderState();
+    publishCommand();
+  } catch (error) {
+    setStatus(`Action failed: ${error.message}`);
+  }
+}
+
+function handleServoInput() {
+  state.servo = clampServoAngle(Number(servoSliderEl.value));
+  renderServo();
+
+  if (mqttConnected) {
+    queueServoPublish();
+  }
+}
+
+function sendServoNow() {
+  try {
+    state.servo = clampServoAngle(Number(servoSliderEl.value));
+    renderServo();
     publishCommand();
   } catch (error) {
     setStatus(`Action failed: ${error.message}`);
@@ -229,6 +302,9 @@ function bindEvents() {
   saveSettingsBtnEl.addEventListener("click", saveSettings);
   connectBtnEl.addEventListener("click", connectMqtt);
   disconnectBtnEl.addEventListener("click", () => disconnectMqtt(true));
+
+  servoSliderEl.addEventListener("input", handleServoInput);
+  servoSendBtnEl.addEventListener("click", sendServoNow);
 }
 
 function init() {

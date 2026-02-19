@@ -70,6 +70,21 @@
             <button type="button" class="off" onclick="setRelay(2, 0)">OFF</button>
           </div>
         </article>
+
+        <article class="relay-card" id="servo-card">
+          <h3>Servo</h3>
+          <p>ESP32 GPIO4</p>
+          <p class="state" id="servo-state">Position: 90 deg</p>
+          <input id="servo-slider" class="servo-slider" type="range" min="0" max="180" step="1" value="90" />
+          <div class="servo-labels">
+            <span>0</span>
+            <span>90</span>
+            <span>180</span>
+          </div>
+          <div class="actions">
+            <button type="button" id="servo-send" class="secondary">Set Position</button>
+          </div>
+        </article>
       </section>
 
       <p class="note">

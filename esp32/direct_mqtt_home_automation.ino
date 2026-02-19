@@ -1,6 +1,7 @@
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <PubSubClient.h>
+#include <ESP32Servo.h>
 
 const char* WIFI_SSID = "YOUR_WIFI_SSID";
 const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
@@ -19,56 +20,125 @@ const bool MQTT_ALLOW_INSECURE_TLS = true;
 
 const int RELAY1_PIN = 16;
 const int RELAY2_PIN = 17;
+const int SERVO_PIN = 4;
 
 // Most relay boards are active LOW.
 const int RELAY_ON_LEVEL = LOW;
 const int RELAY_OFF_LEVEL = HIGH;
 
+const int SERVO_MIN_ANGLE = 0;
+const int SERVO_MAX_ANGLE = 180;
+const int SERVO_DEFAULT_ANGLE = 90;
+
 WiFiClientSecure secureClient;
 PubSubClient mqttClient(secureClient);
+Servo controlServo;
 
 int relay1State = 0;
 int relay2State = 0;
+int servoAngle = SERVO_DEFAULT_ANGLE;
 
 void setRelayPin(int pin, int state) {
   digitalWrite(pin, state == 1 ? RELAY_ON_LEVEL : RELAY_OFF_LEVEL);
 }
 
-void applyRelayState(int nextRelay1, int nextRelay2) {
+int clampServoAngle(int angle) {
+  if (angle < SERVO_MIN_ANGLE) return SERVO_MIN_ANGLE;
+  if (angle > SERVO_MAX_ANGLE) return SERVO_MAX_ANGLE;
+  return angle;
+}
+
+void applyRelayAndServoState(int nextRelay1, int nextRelay2, int nextServoAngle, bool hasServoAngle) {
   relay1State = nextRelay1;
   relay2State = nextRelay2;
 
+  if (hasServoAngle) {
+    servoAngle = clampServoAngle(nextServoAngle);
+  }
+
   setRelayPin(RELAY1_PIN, relay1State);
   setRelayPin(RELAY2_PIN, relay2State);
+  controlServo.write(servoAngle);
 
   Serial.print("Applied state: ");
   Serial.print(relay1State);
   Serial.print(",");
-  Serial.println(relay2State);
+  Serial.print(relay2State);
+  Serial.print(",");
+  Serial.println(servoAngle);
 }
 
-bool parseRelayPayload(const String& payload, int& outRelay1, int& outRelay2) {
-  int commaIndex = payload.indexOf(',');
-  if (commaIndex < 0) return false;
-
-  String relay1Text = payload.substring(0, commaIndex);
-  String relay2Text = payload.substring(commaIndex + 1);
-
-  relay1Text.trim();
-  relay2Text.trim();
-
-  if (!((relay1Text == "0" || relay1Text == "1") && (relay2Text == "0" || relay2Text == "1"))) {
-    return false;
-  }
-
-  outRelay1 = relay1Text.toInt();
-  outRelay2 = relay2Text.toInt();
+bool parseRelayBit(const String& value, int& outBit) {
+  if (!(value == "0" || value == "1")) return false;
+  outBit = value.toInt();
   return true;
 }
 
-void publishRelayState() {
-  char payload[8];
-  snprintf(payload, sizeof(payload), "%d,%d", relay1State, relay2State);
+bool parseServoValue(const String& value, int& outServoAngle) {
+  if (value.length() == 0) return false;
+
+  for (unsigned int i = 0; i < value.length(); i++) {
+    if (!isDigit(static_cast<unsigned char>(value.charAt(i)))) {
+      return false;
+    }
+  }
+
+  int parsed = value.toInt();
+  if (parsed < SERVO_MIN_ANGLE || parsed > SERVO_MAX_ANGLE) return false;
+
+  outServoAngle = parsed;
+  return true;
+}
+
+// Supports both formats:
+// 1) relay1,relay2
+// 2) relay1,relay2,servoAngle
+bool parseControlPayload(
+  const String& payload,
+  int& outRelay1,
+  int& outRelay2,
+  int& outServoAngle,
+  bool& outHasServoAngle
+) {
+  int firstComma = payload.indexOf(',');
+  if (firstComma < 0) return false;
+
+  int secondComma = payload.indexOf(',', firstComma + 1);
+
+  String relay1Text;
+  String relay2Text;
+  String servoText;
+
+  if (secondComma < 0) {
+    relay1Text = payload.substring(0, firstComma);
+    relay2Text = payload.substring(firstComma + 1);
+    outHasServoAngle = false;
+  } else {
+    relay1Text = payload.substring(0, firstComma);
+    relay2Text = payload.substring(firstComma + 1, secondComma);
+    servoText = payload.substring(secondComma + 1);
+    outHasServoAngle = true;
+  }
+
+  relay1Text.trim();
+  relay2Text.trim();
+  servoText.trim();
+
+  if (!parseRelayBit(relay1Text, outRelay1)) return false;
+  if (!parseRelayBit(relay2Text, outRelay2)) return false;
+
+  if (outHasServoAngle) {
+    if (!parseServoValue(servoText, outServoAngle)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+void publishState() {
+  char payload[16];
+  snprintf(payload, sizeof(payload), "%d,%d,%d", relay1State, relay2State, servoAngle);
 
   if (mqttClient.publish(MQTT_TOPIC_STATE, payload, true)) {
     Serial.print("Published state: ");
@@ -93,14 +163,16 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 
   int nextRelay1 = 0;
   int nextRelay2 = 0;
+  int nextServoAngle = servoAngle;
+  bool hasServoAngle = false;
 
-  if (!parseRelayPayload(message, nextRelay1, nextRelay2)) {
-    Serial.println("Invalid payload. Expected format: 0,1");
+  if (!parseControlPayload(message, nextRelay1, nextRelay2, nextServoAngle, hasServoAngle)) {
+    Serial.println("Invalid payload. Expected: 0,1 or 0,1,90");
     return;
   }
 
-  applyRelayState(nextRelay1, nextRelay2);
-  publishRelayState();
+  applyRelayAndServoState(nextRelay1, nextRelay2, nextServoAngle, hasServoAngle);
+  publishState();
 }
 
 void connectWifiBlocking() {
@@ -146,7 +218,7 @@ void connectMqttBlocking() {
       Serial.print("Subscribed: ");
       Serial.println(MQTT_TOPIC_CMD);
 
-      publishRelayState();
+      publishState();
     } else {
       Serial.print("failed, rc=");
       Serial.print(mqttClient.state());
@@ -161,7 +233,10 @@ void setup() {
 
   pinMode(RELAY1_PIN, OUTPUT);
   pinMode(RELAY2_PIN, OUTPUT);
-  applyRelayState(0, 0);
+
+  controlServo.setPeriodHertz(50);
+  controlServo.attach(SERVO_PIN, 500, 2400);
+  applyRelayAndServoState(0, 0, SERVO_DEFAULT_ANGLE, true);
 
   connectWifiBlocking();
 

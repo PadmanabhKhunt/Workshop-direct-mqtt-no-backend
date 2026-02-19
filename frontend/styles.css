@@ -120,6 +120,19 @@ button.off {
   font-weight: 700;
 }
 
+.servo-slider {
+  margin-top: 4px;
+  width: 100%;
+}
+
+.servo-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
 .note {
   margin-top: 16px;
   color: #475569;

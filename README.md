@@ -15,8 +15,9 @@ Project paths:
 
 - Command topic (frontend -> ESP32): `home/workshop/relay/cmd`
 - State topic (ESP32 -> frontend): `home/workshop/relay/state`
-- Payload format: `relay1,relay2`
-  - Examples: `1,0`, `0,1`, `1,1`
+- Payload format: `relay1,relay2,servoAngle`
+  - Examples: `1,0,45`, `0,1,90`, `1,1,180`
+- Backward compatible format: `relay1,relay2` (servo keeps previous angle)
 
 ## 2) Frontend setup
 
@@ -77,6 +78,7 @@ Open in Arduino IDE:
 
 Install library:
 - `PubSubClient` by Nick O'Leary
+- `ESP32Servo` by Kevin Harrington / John K. Bennett
 
 Set:
 - `WIFI_SSID`
@@ -84,6 +86,7 @@ Set:
 - `MQTT_BROKER_HOST`
 - `MQTT_USERNAME`
 - `MQTT_PASSWORD`
+- `SERVO_PIN` is set to `4` (GPIO4)
 
 Upload code and open Serial Monitor (115200).
 
@@ -91,10 +94,15 @@ Upload code and open Serial Monitor (115200).
 
 - Relay 1 -> GPIO16
 - Relay 2 -> GPIO17
+- Servo signal -> GPIO4
 
 If your relay is active HIGH, swap in code:
 - `RELAY_ON_LEVEL = HIGH`
 - `RELAY_OFF_LEVEL = LOW`
+
+Servo power note:
+- Do not power servo from ESP32 3.3V pin.
+- Use external 5V supply and keep GND common with ESP32.
 
 ## 5) Security notes
 
