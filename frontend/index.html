@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Direct MQTT Home Automation</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="page">
+      <h1>Direct MQTT Home Automation</h1>
+      <p class="subtitle">No backend server. Browser and ESP32 both connect directly to MQTT broker.</p>
+
+      <section class="panel">
+        <h2>MQTT Connection</h2>
+
+        <label>
+          Broker WebSocket URL
+          <input id="broker-url" type="text" placeholder="wss://YOUR_CLUSTER.s1.eu.hivemq.cloud:8884/mqtt" />
+        </label>
+
+        <div class="row">
+          <label>
+            Username
+            <input id="mqtt-username" type="text" placeholder="MQTT username" />
+          </label>
+          <label>
+            Password
+            <input id="mqtt-password" type="password" placeholder="MQTT password" />
+          </label>
+        </div>
+
+        <div class="row">
+          <label>
+            Command Topic (publish)
+            <input id="topic-cmd" type="text" />
+          </label>
+          <label>
+            State Topic (subscribe)
+            <input id="topic-state" type="text" />
+          </label>
+        </div>
+
+        <div class="actions">
+          <button id="save-settings" type="button" class="secondary">Save Settings</button>
+          <button id="connect-mqtt" type="button">Connect MQTT</button>
+          <button id="disconnect-mqtt" type="button" class="secondary">Disconnect</button>
+        </div>
+
+        <p id="status">Disconnected.</p>
+      </section>
+
+      <section class="relay-grid">
+        <article class="relay-card" id="relay1-card">
+          <h3>Relay 1</h3>
+          <p>ESP32 GPIO16</p>
+          <p class="state" id="relay1-state">State: OFF (0)</p>
+          <div class="actions">
+            <button type="button" class="on" onclick="setRelay(1, 1)">ON</button>
+            <button type="button" class="off" onclick="setRelay(1, 0)">OFF</button>
+          </div>
+        </article>
+
+        <article class="relay-card" id="relay2-card">
+          <h3>Relay 2</h3>
+          <p>ESP32 GPIO17</p>
+          <p class="state" id="relay2-state">State: OFF (0)</p>
+          <div class="actions">
+            <button type="button" class="on" onclick="setRelay(2, 1)">ON</button>
+            <button type="button" class="off" onclick="setRelay(2, 0)">OFF</button>
+          </div>
+        </article>
+      </section>
+
+      <p class="note">
+        Security note: browser MQTT credentials are visible to users. Use a dedicated low-privilege MQTT account.
+      </p>
+    </main>
+
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <script src="config.js"></script>
+    <script src="script.js"></script>
+  </body>
+</html>
