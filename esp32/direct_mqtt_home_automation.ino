@@ -3,14 +3,14 @@
 #include <PubSubClient.h>
 #include <ESP32Servo.h>
 
-const char* WIFI_SSID = "YOUR_WIFI_SSID";
-const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
+const char* WIFI_SSID = "Padmanabh_EXT";
+const char* WIFI_PASSWORD = "9429115078";
 
-const char* MQTT_BROKER_HOST = "YOUR_CLUSTER_ID.s1.eu.hivemq.cloud";
+const char* MQTT_BROKER_HOST = "471a1ed426ca4130bb41a243d9ccfc31.s1.eu.hivemq.cloud";
 const uint16_t MQTT_BROKER_PORT = 8883;
 const char* MQTT_CLIENT_ID = "esp32-relay-direct-01";
-const char* MQTT_USERNAME = "YOUR_MQTT_USERNAME";
-const char* MQTT_PASSWORD = "YOUR_MQTT_PASSWORD";
+const char* MQTT_USERNAME = "padmanabh_khunt";
+const char* MQTT_PASSWORD = "GVuFBCF2sN9f_g6";
 
 const char* MQTT_TOPIC_CMD = "home/workshop/relay/cmd";
 const char* MQTT_TOPIC_STATE = "home/workshop/relay/state";

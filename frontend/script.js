@@ -26,7 +26,6 @@ const servoSendBtnEl = document.getElementById("servo-send");
 
 let mqttClient = null;
 let mqttConnected = false;
-let servoPublishTimer = null;
 
 const state = {
   relay1: 0,
@@ -123,11 +122,6 @@ function saveSettings() {
 }
 
 function disconnectMqtt(showMessage = true) {
-  if (servoPublishTimer) {
-    window.clearTimeout(servoPublishTimer);
-    servoPublishTimer = null;
-  }
-
   if (mqttClient) {
     mqttClient.end(true);
     mqttClient = null;
@@ -226,7 +220,7 @@ function connectMqtt() {
   });
 }
 
-function publishCommand() {
+function publishCommand(options = {}) {
   if (!mqttClient || !mqttConnected) {
     throw new Error("MQTT not connected.");
   }
@@ -235,23 +229,9 @@ function publishCommand() {
   const payload = `${state.relay1},${state.relay2},${state.servo}`;
 
   mqttClient.publish(topicCmd, payload, { retain: false });
-  setStatus(`Command published: ${payload}`);
-}
-
-function queueServoPublish() {
-  if (servoPublishTimer) {
-    window.clearTimeout(servoPublishTimer);
+  if (!options.silent) {
+    setStatus(`Command published: ${payload}`);
   }
-
-  servoPublishTimer = window.setTimeout(() => {
-    servoPublishTimer = null;
-
-    try {
-      publishCommand();
-    } catch (error) {
-      setStatus(`Action failed: ${error.message}`);
-    }
-  }, 140);
 }
 
 function setRelay(relayIndex, value) {
@@ -274,7 +254,11 @@ function handleServoInput() {
   renderServo();
 
   if (mqttConnected) {
-    queueServoPublish();
+    try {
+      publishCommand({ silent: true });
+    } catch (error) {
+      setStatus(`Action failed: ${error.message}`);
+    }
   }
 }
 
